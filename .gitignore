@@ -1,0 +1,28 @@
+# Environment variables
+.env
+.env*
+**/.env
+**/.env*
+*.env
+
+# Node dependencies
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+**/dist/
+build/
+*.exe
+*.o
+*.obj
+*.bin
+engine/routing_engine
+
+# Temp & OS
+.DS_Store
+scratch/
+
