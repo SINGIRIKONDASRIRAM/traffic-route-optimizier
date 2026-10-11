@@ -1,0 +1,50 @@
+services:
+  # 1. C++ Graph Routing Engine
+  - type: web
+    name: traffic-engine
+    runtime: docker
+    plan: free
+    dockerContext: ./engine
+    dockerfilePath: ./engine/Dockerfile
+    healthCheckPath: /health
+
+  # 2. Node.js Express Gateway API
+  - type: web
+    name: traffic-gateway
+    runtime: node
+    plan: free
+    rootDir: gateway
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: TOMTOM_API_KEY
+        sync: false
+      - key: ENGINE_URL
+        fromService:
+          type: web
+          name: traffic-engine
+          property: url
+
+  # 3. React + Vite Frontend UI
+  - type: web
+    name: traffic-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_TOMTOM_MAP_KEY
+        sync: false
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: traffic-gateway
+          property: url

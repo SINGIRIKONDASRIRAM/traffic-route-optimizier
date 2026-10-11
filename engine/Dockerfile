@@ -14,4 +14,4 @@ COPY --from=build /app/build/routing_engine /app/routing_engine
 COPY --from=build /app/config /app/engine/config
 
 EXPOSE 8080
-CMD ["/app/routing_engine", "8080"]
+CMD ["sh", "-c", "/app/routing_engine ${PORT:-8080}"]

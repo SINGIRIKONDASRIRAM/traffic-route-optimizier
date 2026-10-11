@@ -329,8 +329,16 @@ void handleClient(SOCKET client_fd, WeightCalculator& weight_calc, Graph& global
 
 int main(int argc, char** argv) {
     int port = 8080;
+    const char* env_p = std::getenv("PORT");
+    if (env_p && *env_p) {
+        try {
+            port = std::stoi(env_p);
+        } catch (...) {}
+    }
     if (argc > 1) {
-        port = std::stoi(argv[1]);
+        try {
+            port = std::stoi(argv[1]);
+        } catch (...) {}
     }
 
 #ifdef _WIN32

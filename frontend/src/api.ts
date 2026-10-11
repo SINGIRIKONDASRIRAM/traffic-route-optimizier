@@ -8,7 +8,10 @@ import {
   LocationPoint
 } from './types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const rawBase = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = rawBase.endsWith('/api') 
+  ? rawBase 
+  : (rawBase.endsWith('/') ? `${rawBase}api` : `${rawBase}/api`);
 
 export async function fetchRoute(payload: {
   from: string | LocationPoint;
