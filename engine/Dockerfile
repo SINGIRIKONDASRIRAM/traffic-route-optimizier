@@ -1,6 +1,6 @@
 FROM alpine:3.18 AS build
 
-RUN apk add --no-gradient --no-cache build-base cmake gcc g++
+RUN apk add --no-cache build-base cmake gcc g++
 
 WORKDIR /app
 COPY . .

@@ -1,5 +1,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+ARG VITE_TOMTOM_MAP_KEY
+ARG VITE_API_URL
+ENV VITE_TOMTOM_MAP_KEY=$VITE_TOMTOM_MAP_KEY
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY package*.json ./
 RUN npm ci
 COPY . .
@@ -7,7 +12,6 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 3000
-COPY --from=build /app/dist /usr/share/nginx/html
-RUN sed -i 's/listen       80;/listen       3000;/g' /etc/nginx/conf.d/default.conf
 CMD ["nginx", "-g", "daemon off;"]
