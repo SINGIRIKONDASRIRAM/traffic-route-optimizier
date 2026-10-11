@@ -29,13 +29,11 @@ services:
           property: hostport
 
   # 3. React + Vite Frontend UI
-  - type: web
+  - type: static
     name: traffic-frontend
-    runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    publishPath: ./dist
     routes:
       - type: rewrite
         source: /*
