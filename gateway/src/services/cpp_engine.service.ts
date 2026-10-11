@@ -6,18 +6,34 @@ export class CppEngineService {
   private static engineUrl = config.engineUrl;
 
   public static async checkHealth(): Promise<{ isOnline: boolean; nodesCount?: number; edgesCount?: number }> {
-    try {
-      const res = await axios.get(`${this.engineUrl}/health`, { timeout: 3000 });
-      if (res.data?.status === 'ok') {
-        return {
-          isOnline: true,
-          nodesCount: res.data.nodes_count || 0,
-          edgesCount: res.data.edges_count || 0
-        };
+    const candidateUrls = Array.from(new Set([
+      this.engineUrl,
+      config.engineUrl,
+      'http://traffic-engine:8080',
+      'http://traffic-engine:10000',
+      'http://localhost:8080'
+    ])).filter(Boolean);
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await axios.get(`${url}/health`, { timeout: 6000 });
+        if (res.data?.status === 'ok') {
+          if (this.engineUrl !== url) {
+            console.log(`[C++ Engine] Connected to engine at ${url}`);
+            this.engineUrl = url;
+          }
+          return {
+            isOnline: true,
+            nodesCount: res.data.nodes_count || 0,
+            edgesCount: res.data.edges_count || 0
+          };
+        }
+      } catch (err: any) {
+        // Try next candidate
       }
-    } catch (err) {
-      // Offline
     }
+
+    console.warn(`[C++ Engine Warning] Could not reach C++ engine at candidate URLs: ${candidateUrls.join(', ')}`);
     return { isOnline: false };
   }
 
