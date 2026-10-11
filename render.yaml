@@ -7,6 +7,9 @@ services:
     dockerContext: ./engine
     dockerfilePath: ./engine/Dockerfile
     healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
 
   # 2. Node.js Express Gateway API
   - type: web
@@ -23,10 +26,7 @@ services:
       - key: TOMTOM_API_KEY
         sync: false
       - key: ENGINE_URL
-        fromService:
-          type: web
-          name: traffic-engine
-          property: hostport
+        value: http://traffic-engine:8080
 
   # 3. React + Vite Frontend UI
   - type: web
