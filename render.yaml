@@ -26,7 +26,7 @@ services:
       - key: TOMTOM_API_KEY
         sync: false
       - key: ENGINE_URL
-        value: http://traffic-engine:8080
+        value: https://traffic-engine-5i6k.onrender.com
 
   # 3. React + Vite Frontend UI
   - type: web

@@ -9,6 +9,7 @@ export class CppEngineService {
     const candidateUrls = Array.from(new Set([
       this.engineUrl,
       config.engineUrl,
+      'https://traffic-engine-5i6k.onrender.com',
       'http://traffic-engine:8080',
       'http://traffic-engine:10000',
       'http://localhost:8080'
