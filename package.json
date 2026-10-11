@@ -4,6 +4,8 @@
   "private": true,
   "description": "Traffic Route Optimization using Graph Algorithms",
   "scripts": {
+    "start": "./run_all.sh",
+    "start:all": "./run_all.sh",
     "dev": "npm run dev --prefix frontend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:gateway": "npm run dev --prefix gateway",
