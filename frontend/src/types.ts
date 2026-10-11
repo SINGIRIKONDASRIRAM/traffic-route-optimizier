@@ -25,6 +25,22 @@ export interface GraphEdge {
   geometry?: [number, number][];
 }
 
+export interface TurnInstruction {
+  routeOffsetInMeters: number;
+  travelTimeInSeconds: number;
+  point: { lat: number; lon: number };
+  pointIndex?: number;
+  instructionType?: string;
+  street?: string;
+  roadNumbers?: string[];
+  signpostText?: string;
+  maneuver?: string;
+  message: string;
+  combinedMessage?: string;
+  turnAngleInDecimalDegrees?: number;
+  roundaboutExitNumber?: number;
+}
+
 export interface RouteResult {
   route_id: string;
   name: string;
@@ -46,6 +62,7 @@ export interface RouteResult {
   is_shortest: boolean;
   is_fastest: boolean;
   edge_segments: GraphEdge[];
+  instructions?: TurnInstruction[];
   explanation?: string;
   comparison_text?: string;
 }

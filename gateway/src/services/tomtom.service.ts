@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { config } from '../config';
-import { LocationPoint, TransportMode } from '../types';
+import { LocationPoint, TransportMode, TurnInstruction } from '../types';
 
 export interface TomTomRouteSection {
   startPointIndex: number;
@@ -19,6 +19,7 @@ export interface TomTomRouteData {
   };
   points: [number, number][]; // [lat, lon]
   sections: TomTomRouteSection[];
+  instructions?: TurnInstruction[];
 }
 
 export const isInsideIndia = (lat: number, lon: number): boolean => {
@@ -288,7 +289,9 @@ export class TomTomService {
         travelMode: travelModeMap[mode],
         traffic: 'true',
         sectionType: 'traffic',
-        computeTravelTimeFor: 'all'
+        computeTravelTimeFor: 'all',
+        instructionsType: 'text',
+        language: 'en-GB'
       };
 
       if (mode === 'heavy') {
@@ -314,6 +317,37 @@ export class TomTomService {
 
       const url = `https://api.tomtom.com/routing/1/calculateRoute/${start.lat},${start.lon}:${end.lat},${end.lon}/json`;
 
+      // Helper to parse turn-by-turn guidance from TomTom
+      const parseInstructions = (guidance: any): TurnInstruction[] => {
+        if (!guidance?.instructions || !Array.isArray(guidance.instructions)) return [];
+        return guidance.instructions.map((inst: any) => {
+          let streetName = inst.street || '';
+          const roadNums = Array.isArray(inst.roadNumbers) ? inst.roadNumbers : [];
+          if (!streetName && roadNums.length > 0) {
+            streetName = roadNums.join('/');
+          }
+
+          return {
+            routeOffsetInMeters: inst.routeOffsetInMeters || 0,
+            travelTimeInSeconds: inst.travelTimeInSeconds || 0,
+            point: {
+              lat: inst.point?.latitude || 0,
+              lon: inst.point?.longitude || 0
+            },
+            pointIndex: inst.pointIndex,
+            instructionType: inst.instructionType,
+            street: streetName,
+            roadNumbers: roadNums,
+            signpostText: inst.signpostText || undefined,
+            maneuver: inst.maneuver || 'STRAIGHT',
+            message: inst.message || 'Continue along route',
+            combinedMessage: inst.combinedMessage,
+            turnAngleInDecimalDegrees: inst.turnAngleInDecimalDegrees,
+            roundaboutExitNumber: inst.roundaboutExitNumber
+          };
+        });
+      };
+
       // Fetch shortest route and fastest + alternatives in parallel
       const [shortestRes, fastestRes] = await Promise.allSettled([
         axios.get(url, { params: shortestParams, timeout: 12000 }),
@@ -336,7 +370,8 @@ export class TomTomService {
             noTrafficTravelTimeInSeconds: sr.summary.noTrafficTravelTimeInSeconds || sr.summary.travelTimeInSeconds
           },
           points: sPoints,
-          sections: sr.sections || []
+          sections: sr.sections || [],
+          instructions: parseInstructions(sr.guidance)
         });
       }
 
@@ -354,7 +389,8 @@ export class TomTomService {
               noTrafficTravelTimeInSeconds: fr.summary.noTrafficTravelTimeInSeconds || fr.summary.travelTimeInSeconds
             },
             points: fPoints,
-            sections: fr.sections || []
+            sections: fr.sections || [],
+            instructions: parseInstructions(fr.guidance)
           };
 
           // Filter duplicates (within 1% distance and >= 90% geometric overlap)
@@ -416,6 +452,63 @@ export class TomTomService {
 
     const routes: TomTomRouteData[] = [];
 
+    // Helper to generate realistic road steps along synthetic points
+    const makeSyntheticInstructions = (pts: [number, number][], routeDist: number, routeTime: number, corridorName: string): TurnInstruction[] => {
+      const pCount = pts.length;
+      return [
+        {
+          routeOffsetInMeters: 0,
+          travelTimeInSeconds: 0,
+          point: { lat: pts[0][0], lon: pts[0][1] },
+          pointIndex: 0,
+          instructionType: 'LOCATION_DEPARTURE',
+          maneuver: 'DEPART',
+          street: start.name || 'Main Access Road',
+          message: `Depart from ${start.name || 'Start Location'}`
+        },
+        {
+          routeOffsetInMeters: Math.round(routeDist * 0.2),
+          travelTimeInSeconds: Math.round(routeTime * 0.2),
+          point: { lat: pts[Math.floor(pCount * 0.2)][0], lon: pts[Math.floor(pCount * 0.2)][1] },
+          pointIndex: Math.floor(pCount * 0.2),
+          instructionType: 'TURN',
+          maneuver: 'TURN_RIGHT',
+          street: corridorName,
+          message: `Turn right onto ${corridorName}`
+        },
+        {
+          routeOffsetInMeters: Math.round(routeDist * 0.55),
+          travelTimeInSeconds: Math.round(routeTime * 0.55),
+          point: { lat: pts[Math.floor(pCount * 0.55)][0], lon: pts[Math.floor(pCount * 0.55)][1] },
+          pointIndex: Math.floor(pCount * 0.55),
+          instructionType: 'TURN',
+          maneuver: 'BEAR_LEFT',
+          street: `${corridorName} Bypass`,
+          message: `Bear left onto ${corridorName} Bypass`
+        },
+        {
+          routeOffsetInMeters: Math.round(routeDist * 0.85),
+          travelTimeInSeconds: Math.round(routeTime * 0.85),
+          point: { lat: pts[Math.floor(pCount * 0.85)][0], lon: pts[Math.floor(pCount * 0.85)][1] },
+          pointIndex: Math.floor(pCount * 0.85),
+          instructionType: 'TURN',
+          maneuver: 'TURN_LEFT',
+          street: 'Connecting Road',
+          message: 'Turn left onto Connecting Road towards Destination'
+        },
+        {
+          routeOffsetInMeters: Math.round(routeDist),
+          travelTimeInSeconds: Math.round(routeTime),
+          point: { lat: pts[pCount - 1][0], lon: pts[pCount - 1][1] },
+          pointIndex: pCount - 1,
+          instructionType: 'LOCATION_ARRIVAL',
+          maneuver: 'ARRIVE_RIGHT',
+          street: end.name || 'Destination',
+          message: `You have arrived at ${end.name || 'Destination'}`
+        }
+      ];
+    };
+
     // Route 1: Shortest distance, direct road corridor, moderate traffic delay
     const points1 = this.interpolatePath(start, end, numPoints, 0.0);
     const dist1 = directDist * 1.03;
@@ -435,7 +528,8 @@ export class TomTomService {
         sectionType: 'TRAFFIC',
         simpleCategory: 'SLOW',
         delayInSeconds: delay1
-      }] : []
+      }] : [],
+      instructions: makeSyntheticInstructions(points1, dist1, freeTime1 + delay1, 'Direct Arterial Corridor')
     });
 
     // Route 2: Faster bypass/expressway, slightly longer (+1.5 km), minimal delay
@@ -457,7 +551,8 @@ export class TomTomService {
         sectionType: 'TRAFFIC',
         simpleCategory: 'SLOW',
         delayInSeconds: delay2
-      }]
+      }],
+      instructions: makeSyntheticInstructions(points2, dist2, freeTime2 + delay2, 'Expressway Ring Road')
     });
 
     // Route 3: Outer ring alternative
@@ -473,7 +568,8 @@ export class TomTomService {
         noTrafficTravelTimeInSeconds: freeTime3
       },
       points: points3,
-      sections: []
+      sections: [],
+      instructions: makeSyntheticInstructions(points3, dist3, freeTime3 + delay3, 'Outer Bypass Corridor')
     });
 
     return routes;

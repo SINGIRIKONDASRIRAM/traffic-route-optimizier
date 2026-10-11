@@ -65,6 +65,27 @@ const waypointIcon = L.divIcon({
   iconAnchor: [4.5, 4.5]
 });
 
+// Turn maneuver icon for road navigation junctions
+const createTurnMarkerIcon = (maneuver?: string) => {
+  const isLeft = maneuver?.includes('LEFT');
+  const isRight = maneuver?.includes('RIGHT');
+  const isUturn = maneuver?.includes('UTURN');
+  const isRoundabout = maneuver?.includes('ROUNDABOUT');
+
+  const symbol = isUturn ? '⮌' : isRoundabout ? '⟳' : isLeft ? '↰' : isRight ? '↱' : '↑';
+
+  return L.divIcon({
+    className: 'gmaps-turn-marker',
+    html: `
+      <div style="width: 22px; height: 22px; border-radius: 50%; background: #082f49; border: 2px solid #06b6d4; display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 11px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.6); cursor: pointer;">
+        ${symbol}
+      </div>
+    `,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+};
+
 // Google Maps Style Route Label Box: "🚗 19 min" bold line 1, "12.4 km" grey line 2
 const createRouteLabelIcon = (travelTimeMin: number, distKm: string, isSelected: boolean) => {
   const formattedTime = travelTimeMin >= 60
@@ -445,16 +466,48 @@ export const MapView: React.FC<MapViewProps> = ({
               </>
             )}
 
-            {/* Waypoint dots at major turns only (max 10) */}
-            {waypoints.map((wp, wIdx) => (
-              <Marker
-                key={`wp_${wp.id || wIdx}`}
-                position={[wp.lat, wp.lon]}
-                icon={waypointIcon}
-                zIndexOffset={100}
-                interactive={false}
-              />
-            ))}
+            {/* Road turn maneuvers and checkpoints along the route */}
+            {selectedRoute.instructions && selectedRoute.instructions.length > 0 ? (
+              selectedRoute.instructions
+                .filter((_, idx) => idx > 0 && idx < selectedRoute.instructions!.length - 1)
+                .slice(0, 15)
+                .map((inst, tIdx) => (
+                  <Marker
+                    key={`turn_${tIdx}`}
+                    position={[inst.point.lat, inst.point.lon]}
+                    icon={createTurnMarkerIcon(inst.maneuver)}
+                    zIndexOffset={150}
+                  >
+                    <Popup className="turn-popup">
+                      <div className="p-1 text-xs text-slate-900 min-w-[150px]">
+                        <div className="font-bold text-cyan-700 flex items-center gap-1">
+                          <span>🧭 Road Maneuver</span>
+                        </div>
+                        <div className="font-semibold text-slate-800 mt-0.5 leading-snug">{inst.message}</div>
+                        {inst.street && (
+                          <div className="text-[11px] text-cyan-800 font-semibold mt-1">
+                            🛣 {inst.street}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-500 mt-1 border-t pt-1">
+                          Distance: {(inst.routeOffsetInMeters / 1000).toFixed(1)} km
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))
+            ) : (
+              /* Fallback waypoint dots */
+              waypoints.map((wp, wIdx) => (
+                <Marker
+                  key={`wp_${wp.id || wIdx}`}
+                  position={[wp.lat, wp.lon]}
+                  icon={waypointIcon}
+                  zIndexOffset={100}
+                  interactive={false}
+                />
+              ))
+            )}
 
             {/* Google Maps Selected Route Label Box (Cyan border, top z-index) */}
             {selectedLabelPos && (

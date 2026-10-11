@@ -5,7 +5,7 @@ import { TomTomService, isInsideIndia } from '../services/tomtom.service';
 import { GraphBuilder } from '../services/graph_builder';
 import { CppEngineService } from '../services/cpp_engine.service';
 import { SupabaseService } from '../services/supabase.service';
-import { TransportMode, LocationPoint } from '../types';
+import { TransportMode, LocationPoint, TurnInstruction } from '../types';
 
 const router = Router();
 
@@ -117,6 +117,16 @@ router.post('/route', async (req: Request, res: Response) => {
       return poly;
     };
 
+    // Helper to extract turn waypoints from instructions
+    const getTurnWaypoints = (insts?: TurnInstruction[]) => {
+      if (!insts || insts.length === 0) return [];
+      return insts.slice(0, 10).map((inst, idx) => ({
+        id: inst.street || inst.maneuver || `Turn ${idx + 1}`,
+        lat: inst.point.lat,
+        lon: inst.point.lon
+      }));
+    };
+
     // 4. Validate polylines returned by C++ engine against original TomTom road geometries
     if (engineRes.shortest_route && routes.length > 0) {
       engineRes.shortest_route.polyline = validateRoutePolyline(
@@ -128,16 +138,23 @@ router.post('/route', async (req: Request, res: Response) => {
       engineRes.shortest_route.travel_time_s = routes[0].summary.travelTimeInSeconds;
       engineRes.shortest_route.free_flow_time_s = routes[0].summary.noTrafficTravelTimeInSeconds;
       engineRes.shortest_route.is_shortest = true;
+      engineRes.shortest_route.instructions = routes[0].instructions || [];
+      const turnWps = getTurnWaypoints(routes[0].instructions);
+      if (turnWps.length > 0) engineRes.shortest_route.waypoints = turnWps;
     }
 
     if (engineRes.best_route && routes.length > 0) {
       // Best route maps to the fastest/lowest cost candidate
-      const bestFallback = routes.length > 1 ? routes[1].points : routes[0].points;
+      const bestIdx = routes.length > 1 ? 1 : 0;
+      const bestFallback = routes[bestIdx].points;
       engineRes.best_route.polyline = validateRoutePolyline(
         engineRes.best_route.polyline,
         bestFallback,
         'Best Route'
       );
+      engineRes.best_route.instructions = routes[bestIdx].instructions || routes[0].instructions || [];
+      const turnWps = getTurnWaypoints(engineRes.best_route.instructions);
+      if (turnWps.length > 0) engineRes.best_route.waypoints = turnWps;
     }
 
     if (engineRes.fastest_route && routes.length > 0) {
@@ -155,6 +172,9 @@ router.post('/route', async (req: Request, res: Response) => {
         'Fastest Route'
       );
       engineRes.fastest_route.is_fastest = true;
+      engineRes.fastest_route.instructions = routes[fastestIdx].instructions || [];
+      const turnWps = getTurnWaypoints(routes[fastestIdx].instructions);
+      if (turnWps.length > 0) engineRes.fastest_route.waypoints = turnWps;
     }
 
     // 5. Alternatives shown on the map come ONLY from TomTom's returned routes, scored by the C++ engine
@@ -207,7 +227,16 @@ router.post('/route', async (req: Request, res: Response) => {
         path: routeEdges.map(e => e.from).concat(routeEdges.length > 0 ? [routeEdges[routeEdges.length - 1].to] : []),
         edge_ids: routeEdges.map(e => e.id),
         polyline: validPoly,
-        waypoints: (routeEdges.slice(0, 8).map(e => ({ id: e.from, lat: validPoly[0][0], lon: validPoly[0][1] }))),
+        waypoints: (r.instructions && r.instructions.length > 0)
+          ? getTurnWaypoints(r.instructions)
+          : (routeEdges.slice(0, 8).map((e, idx) => {
+              const node = graph.nodes.find(n => n.id === e.from);
+              return {
+                id: e.from,
+                lat: node ? node.lat : (validPoly[Math.floor((idx / 8) * validPoly.length)]?.[0] || validPoly[0][0]),
+                lon: node ? node.lon : (validPoly[Math.floor((idx / 8) * validPoly.length)]?.[1] || validPoly[0][1])
+              };
+            })),
         total_cost: Math.round(totalCost * 100) / 100,
         distance_m: r.summary.lengthInMeters,
         travel_time_s: r.summary.travelTimeInSeconds,
@@ -221,6 +250,7 @@ router.post('/route', async (req: Request, res: Response) => {
         is_shortest: (i === 0),
         is_fastest: (r.summary.travelTimeInSeconds <= Math.min(...routes.map(x => x.summary.travelTimeInSeconds))),
         edge_segments: routeEdges,
+        instructions: r.instructions || [],
         explanation: (i === 0) ? 'Shortest physical distance path following real road network.' : 'Traffic-optimized route avoiding surface congestion.'
       });
     }

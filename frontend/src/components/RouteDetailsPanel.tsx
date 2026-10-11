@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RouteResult } from '../types';
-import { Clock, Navigation, AlertTriangle, CheckCircle2, Zap, ArrowRight, ChevronDown, ChevronUp, Milestone } from 'lucide-react';
+import { Clock, Navigation, AlertTriangle, CheckCircle2, Zap, ArrowRight, ChevronDown, ChevronUp, Milestone, CornerUpLeft, CornerUpRight, RotateCcw, ArrowUp, Flag, MapPin, Compass } from 'lucide-react';
 
 interface RouteDetailsPanelProps {
   activeRoute?: RouteResult;
@@ -27,7 +27,7 @@ export const RouteDetailsPanel: React.FC<RouteDetailsPanelProps> = ({
   setRoutePreference,
   onSelectRoute
 }) => {
-  const [showWaypoints, setShowWaypoints] = useState(false);
+  const [showDirections, setShowDirections] = useState(true);
 
   if (!activeRoute) {
     return (
@@ -241,34 +241,122 @@ export const RouteDetailsPanel: React.FC<RouteDetailsPanelProps> = ({
         </div>
       )}
 
-      {/* 4. Turn-by-Turn Waypoints Toggle */}
-      {activeRoute.waypoints && activeRoute.waypoints.length > 0 && (
-        <div className="glass-panel rounded-xl overflow-hidden border border-white/[0.08]">
+      {/* 4. Turn-by-Turn Road Directions */}
+      {((activeRoute.instructions && activeRoute.instructions.length > 0) || (activeRoute.waypoints && activeRoute.waypoints.length > 0)) && (
+        <div className="glass-panel rounded-xl overflow-hidden border border-white/[0.08] shadow-lg">
           <button
             type="button"
-            onClick={() => setShowWaypoints(!showWaypoints)}
-            className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-slate-300 hover:text-white transition-colors"
+            onClick={() => setShowDirections(!showDirections)}
+            className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-slate-200 hover:text-white transition-colors bg-slate-900/40"
           >
             <div className="flex items-center gap-2">
-              <Milestone className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Waypoints & Key Turns ({activeRoute.waypoints.length})</span>
+              <Navigation className="w-4 h-4 text-cyan-400" />
+              <span>
+                Turn-by-Turn Road Directions ({activeRoute.instructions?.length || activeRoute.waypoints.length} steps)
+              </span>
             </div>
-            {showWaypoints ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            <div className="flex items-center gap-2 text-cyan-400 text-[11px] font-semibold">
+              <span>{showDirections ? 'Hide Steps' : 'View Steps'}</span>
+              {showDirections ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </div>
           </button>
 
-          {showWaypoints && (
-            <div className="p-3 bg-slate-900/60 border-t border-white/[0.06] flex flex-col gap-2 max-h-48 overflow-y-auto">
-              {activeRoute.waypoints.map((wp, i) => (
-                <div key={i} className="flex items-center gap-2.5 text-xs text-slate-300 py-1 border-b border-white/[0.04] last:border-0">
-                  <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-[10px] font-bold flex items-center justify-center shrink-0">
-                    {i + 1}
-                  </span>
-                  <span className="truncate">{wp.id || `Waypoint #${i + 1}`}</span>
-                  <span className="text-[10px] text-slate-500 font-mono ml-auto">
-                    {wp.lat?.toFixed(3)}, {wp.lon?.toFixed(3)}
-                  </span>
-                </div>
-              ))}
+          {showDirections && (
+            <div className="p-3 bg-slate-900/90 border-t border-white/[0.06] flex flex-col gap-2.5 max-h-72 overflow-y-auto">
+              {activeRoute.instructions && activeRoute.instructions.length > 0 ? (
+                activeRoute.instructions.map((inst, i) => {
+                  const isDepart = inst.maneuver === 'DEPART' || inst.instructionType === 'LOCATION_DEPARTURE' || i === 0;
+                  const isArrive = inst.maneuver === 'ARRIVE' || inst.instructionType === 'LOCATION_ARRIVAL' || i === activeRoute.instructions!.length - 1;
+                  const isLeft = inst.maneuver?.includes('LEFT');
+                  const isRight = inst.maneuver?.includes('RIGHT');
+                  const isUturn = inst.maneuver?.includes('UTURN');
+                  const isRoundabout = inst.maneuver?.includes('ROUNDABOUT');
+
+                  // Distance on this segment before the next maneuver
+                  const nextInst = activeRoute.instructions![i + 1];
+                  const segDistM = nextInst ? Math.max(0, nextInst.routeOffsetInMeters - inst.routeOffsetInMeters) : 0;
+                  const segDistFormatted = segDistM >= 1000 ? `${(segDistM / 1000).toFixed(1)} km` : `${segDistM} m`;
+
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 p-3 rounded-xl bg-slate-950/80 border border-white/[0.05] hover:border-cyan-500/40 hover:bg-slate-900/60 transition-all shadow-sm"
+                    >
+                      {/* Turn Icon Badge */}
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-md ${
+                        isDepart ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
+                        isArrive ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' :
+                        isUturn ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
+                        isRoundabout ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40' :
+                        isLeft ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
+                        isRight ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40' :
+                        'bg-slate-800 text-slate-300 border border-white/[0.1]'
+                      }`}>
+                        {isDepart ? <MapPin className="w-4 h-4" /> :
+                         isArrive ? <Flag className="w-4 h-4" /> :
+                         isUturn ? <RotateCcw className="w-4 h-4 rotate-180" /> :
+                         isRoundabout ? <RotateCcw className="w-4 h-4" /> :
+                         isLeft ? <CornerUpLeft className="w-4 h-4" /> :
+                         isRight ? <CornerUpRight className="w-4 h-4" /> :
+                         <ArrowUp className="w-4 h-4" />}
+                      </div>
+
+                      {/* Direction Text, Distance & Badges */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-100 leading-snug">
+                            {inst.message}
+                          </span>
+                          <span className="text-[10px] font-mono shrink-0 px-2 py-0.5 rounded-full font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                            {isDepart ? 'Start' : isArrive ? 'Arrive' : `Go ${segDistFormatted}`}
+                          </span>
+                        </div>
+
+                        {/* Street & Road Badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                          {inst.street && (
+                            <span className="text-[11px] font-medium text-cyan-300 flex items-center gap-1 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                              <span className="truncate max-w-[200px]">{inst.street}</span>
+                            </span>
+                          )}
+
+                          {inst.roadNumbers && inst.roadNumbers.map((rn, rIdx) => (
+                            <span key={rIdx} className="text-[10px] font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">
+                              {rn}
+                            </span>
+                          ))}
+
+                          {inst.roundaboutExitNumber && (
+                            <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-1.5 py-0.5 rounded border border-indigo-500/30">
+                              Exit {inst.roundaboutExitNumber}
+                            </span>
+                          )}
+
+                          {inst.signpostText && (
+                            <span className="text-[10px] font-medium text-emerald-300 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                              ↗ {inst.signpostText}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                /* Fallback waypoint turns */
+                activeRoute.waypoints.map((wp, i) => (
+                  <div key={i} className="flex items-center gap-3 text-xs text-slate-200 p-2 rounded-xl bg-slate-950/70 border border-white/[0.04]">
+                    <span className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 text-[11px] font-bold flex items-center justify-center shrink-0 border border-cyan-500/30">
+                      {i + 1}
+                    </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-semibold truncate text-white">{wp.id || `Road Corridor Step #${i + 1}`}</span>
+                      <span className="text-[10px] text-slate-400">Road Junction Checkpoint</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
