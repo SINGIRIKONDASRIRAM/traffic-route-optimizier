@@ -26,7 +26,7 @@ services:
         fromService:
           type: web
           name: traffic-engine
-          property: url
+          property: hostport
 
   # 3. React + Vite Frontend UI
   - type: web
@@ -44,7 +44,4 @@ services:
       - key: VITE_TOMTOM_MAP_KEY
         sync: false
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: traffic-gateway
-          property: url
+        sync: false

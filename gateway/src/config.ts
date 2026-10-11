@@ -10,10 +10,15 @@ const validTomTomKey = (rawTomTomKey && !rawTomTomKey.includes('your_tomtom') &&
   ? rawTomTomKey
   : '';
 
+const rawEngineUrl = process.env.ENGINE_URL || 'http://localhost:8080';
+const formattedEngineUrl = (rawEngineUrl.startsWith('http://') || rawEngineUrl.startsWith('https://'))
+  ? rawEngineUrl
+  : `http://${rawEngineUrl}`;
+
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   tomtomApiKey: validTomTomKey,
-  engineUrl: process.env.ENGINE_URL || 'http://localhost:8080',
+  engineUrl: formattedEngineUrl,
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
